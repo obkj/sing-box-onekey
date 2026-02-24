@@ -502,6 +502,7 @@ uninstall_singbox() {
                 systemctl daemon-reload 2>/dev/null || true
            fi
            rm -rf "${work_dir}" /etc/systemd/system/sing-box.service 2>/dev/null
+           rm -f /usr/bin/sb
            green "\nsing-box 卸载成功\n" && exit 0
            ;;
        *)
@@ -512,18 +513,23 @@ uninstall_singbox() {
 
 # 创建快捷指令（使用当前脚本路径）
 create_shortcut() {
+  rm -f /usr/bin/sb
   local target_path="$work_dir/sing-box.sh"
   if [ -n "$SCRIPT_PATH" ] && [ -f "$SCRIPT_PATH" ]; then
     cp -f "$SCRIPT_PATH" "$target_path"
     chmod +x "$target_path"
   fi
-  [ ! -f "$target_path" ] && yellow "\n未找到脚本文件，请手动将脚本保存到 $target_path\n"
-  cat > "$work_dir/sb.sh" << EOF
+  if [ -f "$target_path" ]; then
+    cat > "$work_dir/sb.sh" << EOF
 #!/usr/bin/env bash
 exec bash "$target_path" "\$@"
 EOF
-  chmod +x "$work_dir/sb.sh"
-  ln -sf "$work_dir/sb.sh" /usr/bin/sb 2>/dev/null && green "\n快捷指令 sb 已创建\n" || yellow "\n需 root 才能创建 /usr/bin/sb\n"
+    chmod +x "$work_dir/sb.sh"
+    ln -sf "$work_dir/sb.sh" /usr/bin/sb 2>/dev/null && green "\n快捷指令 sb 已创建\n" || yellow "\n需 root 才能创建 /usr/bin/sb\n"
+  else
+    yellow "\n未找到脚本文件，跳过创建快捷指令 sb\n"
+    yellow "请手动将脚本保存到 $target_path\n"
+  fi
 }
 
 # 适配 Alpine
@@ -638,7 +644,7 @@ menu() {
    singbox_status=$(check_singbox 2>/dev/null)
    clear
    echo ""
-   purple "=== sing-box VLESS-Reality 脚本 ===\n"
+   purple "=== sing-box 二合一脚本 ===\n"
    green "sing-box 状态: ${singbox_status}\n"
    green "1. 安装 sing-box"
    red "2. 卸载 sing-box"
