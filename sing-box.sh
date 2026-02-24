@@ -390,7 +390,7 @@ manage_service() {
         return 1
     fi
     
-    local status=$(check_service "$service_name" 2>/dev/null)
+    local status=$(check_singbox)
     status=$(echo "$status" | sed "s/\x1b\[[0-9;]*m//g")
 
     case "$action" in
@@ -559,7 +559,6 @@ change_config() {
     local singbox_installed=$?
     [ $singbox_installed -eq 2 ] && { yellow "sing-box 尚未安装！"; sleep 1; menu; return; }
     [ $singbox_installed -eq 2 ] && { yellow "sing-box 尚未安装！"; sleep 1; return; }
-
     clear
     echo ""
     green "=== 修改节点配置 ===\n"
@@ -588,7 +587,6 @@ change_config() {
             [ -z "$new_uuid" ] && new_uuid=$(cat /proc/sys/kernel/random/uuid)
             sed -i 's/"uuid": "[a-f0-9-]*"/"uuid": "'"$new_uuid"'"/' $config_dir
             restart_singbox
-            restart_singbox
             sed -i -E 's/(vless:\/\/)[^@]*(@.*)/\1'"$new_uuid"'\2/' $client_dir
             sed -i -E 's/(tuic:\/\/)[^:]*:[^@]*(@.*)/\1'"$new_uuid"':'"$new_uuid"'\2/' $client_dir
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
@@ -600,7 +598,6 @@ change_config() {
             [ -z "$new_sni" ] && new_sni="www.iij.ad.jp"
             jq --arg s "$new_sni" '(.inbounds[]|select(.type=="vless")|.tls.server_name)=$s | (.inbounds[]|select(.type=="vless")|.tls.reality.handshake.server)=$s' "$config_dir" > "${config_dir}.tmp" && mv "${config_dir}.tmp" "$config_dir" || rm -f "${config_dir}.tmp"
             restart_singbox
-            restart_singbox
             sed -i "s/\(vless:\/\/[^\?]*\?\([^\&]*\&\)*sni=\)[^&]*/\1$new_sni/" $client_dir
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
             green "\nReality SNI 已改为：${purple}${new_sni}${re}\n"
@@ -609,7 +606,6 @@ change_config() {
             reading "\n请输入新 TUIC 端口 (回车随机): " new_port
             [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
             sed -i '/"type": "tuic"/,/listen_port/ s/"listen_port": [0-9]\+/"listen_port": '"$new_port"'/' $config_dir
-            restart_singbox
             restart_singbox
             allow_port $new_port/udp > /dev/null 2>&1
             sed -i 's/\(tuic:\/\/[^@]*@[^:]*:\)[0-9]\{1,\}/\1'"$new_port"'/' $client_dir
