@@ -512,14 +512,15 @@ uninstall_singbox() {
 
 # 创建快捷指令（使用当前脚本路径）
 create_shortcut() {
-  local script_path="${SCRIPT_PATH:-$work_dir/sing-box.sh}"
-  if [ ! -f "$script_path" ]; then
-    script_path="$work_dir/sing-box.sh"
-    yellow "\n请将本脚本保存到 ${script_path} 后可使用 sb 命令\n"
+  local target_path="$work_dir/sing-box.sh"
+  if [ -n "$SCRIPT_PATH" ] && [ -f "$SCRIPT_PATH" ]; then
+    cp -f "$SCRIPT_PATH" "$target_path"
+    chmod +x "$target_path"
   fi
+  [ ! -f "$target_path" ] && yellow "\n未找到脚本文件，请手动将脚本保存到 $target_path\n"
   cat > "$work_dir/sb.sh" << EOF
 #!/usr/bin/env bash
-exec bash "$script_path" "\$@"
+exec bash "$target_path" "\$@"
 EOF
   chmod +x "$work_dir/sb.sh"
   ln -sf "$work_dir/sb.sh" /usr/bin/sb 2>/dev/null && green "\n快捷指令 sb 已创建\n" || yellow "\n需 root 才能创建 /usr/bin/sb\n"
