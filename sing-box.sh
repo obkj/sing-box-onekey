@@ -127,20 +127,6 @@ manage_packages() {
     return 0
 }
 
-# 获取ip
-get_realip() {
-    ip=$(curl -4 -sm 2 ip.sb)
-    ipv6() { curl -6 -sm 2 ip.sb; }
-    if [ -z "$ip" ]; then
-        echo "[$(ipv6)]"
-    elif curl -4 -sm 2 http://ipinfo.io/org | grep -qE 'Cloudflare|UnReal|AEZA|Andrei'; then
-        echo "[$(ipv6)]"
-    else
-        v6=$(ipv6)
-        [ -n "$v6" ] && echo "[$v6]" || echo "$ip"
-    fi
-}
-
 # 处理防火墙
 allow_port() {
     has_ufw=0
@@ -368,12 +354,23 @@ EOF
 # 生成节点信息
 get_info() {
   yellow "\n正在获取 IP，请稍等...\n"
-  server_ip=$(get_realip)
+  local ipv4=$(curl -4 -s --max-time 2 ip.sb)
+  local ipv6=$(curl -6 -s --max-time 2 ip.sb)
+
   clear
   isp=$(curl -sm 3 -H "User-Agent: Mozilla/5.0" "https://api.ip.sb/geoip" | tr -d '\n' | awk -F\" '{c="";i="";for(x=1;x<=NF;x++){if($x=="country_code")c=$(x+2);if($x=="isp")i=$(x+2)};if(c&&i)print c"-"i}' | sed 's/ /_/g' || curl -sm 3 -H "User-Agent: Mozilla/5.0" "https://ipapi.co/json" | tr -d '\n' | awk -F\" '{c="";o="";for(x=1;x<=NF;x++){if($x=="country_code")c=$(x+2);if($x=="org")o=$(x+2)};if(c&&o)print c"-"o}' | sed 's/ /_/g' || echo "VPS")
 
-  echo -e "vless://${uuid}@${server_ip}:${vless_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=chrome&pbk=${public_key}&type=tcp&headerType=none#${isp}" > "${work_dir}/url.txt"
-  echo -e "tuic://${uuid}:${uuid}@${server_ip}:${tuic_port}?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=www.bing.com&allow_insecure=1#${isp}_TUIC" >> "${work_dir}/url.txt"
+  > "${work_dir}/url.txt"
+  if [ -n "$ipv4" ]; then
+    echo -e "vless://${uuid}@${ipv4}:${vless_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=chrome&pbk=${public_key}&type=tcp&headerType=none#${isp}" >> "${work_dir}/url.txt"
+    echo -e "tuic://${uuid}:${uuid}@${ipv4}:${tuic_port}?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=www.bing.com&allow_insecure=1#${isp}_TUIC" >> "${work_dir}/url.txt"
+  fi
+  if [ -n "$ipv6" ]; then
+    echo -e "vless://${uuid}@[${ipv6}]:${vless_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=chrome&pbk=${public_key}&type=tcp&headerType=none#${isp}_IPv6" >> "${work_dir}/url.txt"
+    echo -e "tuic://${uuid}:${uuid}@[${ipv6}]:${tuic_port}?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=www.bing.com&allow_insecure=1#${isp}_TUIC_IPv6" >> "${work_dir}/url.txt"
+  fi
+  [ ! -s "${work_dir}/url.txt" ] && red "无法获取 IP 地址" && return
+
   base64 -w0 "${work_dir}/url.txt" > "${work_dir}/sub.txt"
   chmod 644 "${work_dir}/url.txt" "${work_dir}/sub.txt"
 
