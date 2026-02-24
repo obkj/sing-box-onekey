@@ -234,7 +234,6 @@ install_singbox() {
     private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
     public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 
-    allow_port $vless_port/tcp > /dev/null 2>&1
     # Generate Self-signed Cert for TUIC
     openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
         -keyout "${work_dir}/key.pem" -out "${work_dir}/cert.pem" \
@@ -370,11 +369,8 @@ get_info() {
   base64 -w0 "${work_dir}/url.txt" > "${work_dir}/sub.txt"
   chmod 644 "${work_dir}/url.txt" "${work_dir}/sub.txt"
 
-  green "\n========== VLESS-Reality 节点 ==========\n"
+  green "\n========== 节点信息 ==========\n"
   purple "$(cat ${work_dir}/url.txt)\n"
-  purple "$(head -n 1 ${work_dir}/url.txt)\n"
-  green "\n========== TUIC 节点 ==========\n"
-  purple "$(tail -n 1 ${work_dir}/url.txt)\n"
   green "\n订阅文件路径: ${purple}${work_dir}/sub.txt${re}"
   green "可用任意 HTTP 或 base64 订阅转换器使用上述文件。\n"
 }
@@ -390,6 +386,7 @@ manage_service() {
     fi
     
     local status=$(check_service "$service_name" 2>/dev/null)
+    status=$(echo "$status" | sed "s/\x1b\[[0-9;]*m//g")
 
     case "$action" in
         "start")
@@ -584,7 +581,6 @@ change_config() {
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
             green "\nReality SNI 已改为：${purple}${new_sni}${re}\n"
             ;;
-        0) menu ;;
         4)
             reading "\n请输入新 TUIC 端口 (回车随机): " new_port
             [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
@@ -623,8 +619,6 @@ manage_singbox() {
         1) start_singbox ;;  
         2) stop_singbox ;;
         3) restart_singbox ;;
-        0) menu ;;
-        *) red "无效的选项！" && sleep 1 && manage_singbox;;
         0) return ;;
         *) red "无效的选项！" && sleep 1 ;;
     esac
@@ -633,7 +627,6 @@ manage_singbox() {
 # 查看节点信息
 check_nodes() {
     [ ! -f "${work_dir}/url.txt" ] && { yellow "未安装或节点文件不存在"; return; }
-    green "\n========== VLESS-Reality 节点 ==========\n"
     green "\n========== 节点信息 ==========\n"
     while IFS= read -r line; do purple "$line"; done < "${work_dir}/url.txt"
     green "\n订阅文件: ${purple}${work_dir}/sub.txt${re}\n"
@@ -669,7 +662,6 @@ while true; do
             if [ $r -eq 0 ]; then
                 yellow "sing-box 已安装\n"
             else
-                manage_packages install jq coreutils lsof tar
                 manage_packages install jq coreutils lsof tar openssl
                 install_singbox
                 if command_exists systemctl; then
