@@ -221,12 +221,20 @@ install_singbox() {
         *) LINUX_ARCH="${ARCH}" ;;
     esac
     tarball="sing-box-${version}-linux-${LINUX_ARCH}.tar.gz"
+    extract_dir="${work_dir}/sing-box-${version}-linux-${LINUX_ARCH}"
     download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_tag}/${tarball}"
     yellow "正在下载 sing-box ${version} (${LINUX_ARCH}) ..."
-    curl -sLo "${work_dir}/${tarball}" "$download_url" || { red "下载失败"; exit 1; }
-    tar -xzf "${work_dir}/${tarball}" -C "${work_dir}"
-    mv "${work_dir}/sing-box-${version}-linux-${LINUX_ARCH}/sing-box" "${work_dir}/"
-    rm -rf "${work_dir}/${tarball}" "${work_dir}/sing-box-${version}-linux-${LINUX_ARCH}"
+    curl -sLo "${work_dir}/${tarball}" "$download_url" || { red "下载失败"; rm -f "${work_dir}/${tarball}"; exit 1; }
+    
+    if ! tar -xzf "${work_dir}/${tarball}" -C "${work_dir}"; then
+        red "解压失败"; rm -rf "${work_dir}/${tarball}" "${extract_dir}"; exit 1
+    fi
+    
+    if ! mv "${extract_dir}/sing-box" "${work_dir}/"; then
+        red "程序移动失败"; rm -rf "${work_dir}/${tarball}" "${extract_dir}"; exit 1
+    fi
+    
+    rm -rf "${work_dir}/${tarball}" "${extract_dir}"
     chown root:root "${work_dir}/${server_name}" && chmod +x "${work_dir}/${server_name}"
 
     uuid=$(cat /proc/sys/kernel/random/uuid)
@@ -519,6 +527,15 @@ create_shortcut() {
     cp -f "$SCRIPT_PATH" "$target_path"
     chmod +x "$target_path"
   fi
+  if [ ! -f "$target_path" ]; then
+    yellow "\n检测到管道安装，正在下载脚本到本地..."
+    if command_exists curl; then
+      curl -sLo "$target_path" "https://raw.githubusercontent.com/obkj/sing-box-onekey/refs/heads/main/sing-box.sh"
+    elif command_exists wget; then
+      wget -qO "$target_path" "https://raw.githubusercontent.com/obkj/sing-box-onekey/refs/heads/main/sing-box.sh"
+    fi
+    chmod +x "$target_path" 2>/dev/null
+  fi
   if [ -f "$target_path" ]; then
     cat > "$work_dir/sb.sh" << EOF
 #!/usr/bin/env bash
@@ -582,7 +599,7 @@ change_config() {
             green "\n示例: www.joom.com / www.iij.ad.jp (可自定义)\n"
             reading "请输入新 SNI (回车默认 www.iij.ad.jp): " new_sni
             [ -z "$new_sni" ] && new_sni="www.iij.ad.jp"
-            jq --arg s "$new_sni" '(.inbounds[]|select(.type=="vless")|.tls.server_name)=$s | (.inbounds[]|select(.type=="vless")|.tls.reality.handshake.server)=$s' "$config_dir" > "${config_dir}.tmp" && mv "${config_dir}.tmp" "$config_dir"
+            jq --arg s "$new_sni" '(.inbounds[]|select(.type=="vless")|.tls.server_name)=$s | (.inbounds[]|select(.type=="vless")|.tls.reality.handshake.server)=$s' "$config_dir" > "${config_dir}.tmp" && mv "${config_dir}.tmp" "$config_dir" || rm -f "${config_dir}.tmp"
             restart_singbox
             sed -i "s/\(vless:\/\/[^\?]*\?\([^\&]*\&\)*sni=\)[^&]*/\1$new_sni/" $client_dir
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
