@@ -196,10 +196,10 @@ allow_port() {
     fi
 }
 
-# 下载并安装 sing-box (VLESS-Reality)
+# 下载并安装 sing-box
 install_singbox() {
     clear
-    purple "正在安装 sing-box (VLESS-Reality)，请稍后..."
+    purple "正在安装 sing-box，请稍后..."
     ARCH_RAW=$(uname -m)
     case "${ARCH_RAW}" in
         'x86_64') ARCH='amd64' ;;
