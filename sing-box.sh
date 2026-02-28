@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =========================
-# sing-box 安装脚本 - VLESS-Reality + TUIC
+# sing-box 安装脚本 - VLESS-Reality
 # 适用于 Debian/Ubuntu/CentOS/Alpine 等主流 Linux 发行版
 # 最后更新: 2026.02
 # =========================
@@ -27,10 +27,6 @@ work_dir="/etc/sing-box"
 config_dir="${work_dir}/config.json"
 client_dir="${work_dir}/url.txt"
 export vless_port=${PORT:-$(shuf -i 1000-65000 -n 1)}
-export tuic_port=$(shuf -i 1000-65000 -n 1)
-while [ "$tuic_port" -eq "$vless_port" ]; do
-    tuic_port=$(shuf -i 1000-65000 -n 1)
-done
 # 当前脚本绝对路径（用于快捷指令；curl 管道运行时为空）
 SCRIPT_PATH=""
 _script_src="${BASH_SOURCE[0]:-$0}"
@@ -228,12 +224,7 @@ install_singbox() {
     private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
     public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 
-    # Generate Self-signed Cert for TUIC
-    openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
-        -keyout "${work_dir}/key.pem" -out "${work_dir}/cert.pem" \
-        -days 3650 -subj "/CN=www.bing.com" >/dev/null 2>&1
-
-    allow_port $vless_port/tcp $tuic_port/udp > /dev/null 2>&1
+    allow_port $vless_port/tcp > /dev/null 2>&1
 
     dns_strategy=$(ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1 && echo "prefer_ipv4" || (ping -c 1 -W 3 2001:4860:4860::8888 >/dev/null 2>&1 && echo "prefer_ipv6" || echo "prefer_ipv4"))
 
@@ -278,26 +269,6 @@ install_singbox() {
           "private_key": "$private_key",
           "short_id": [""]
         }
-      }
-    },
-    {
-      "type": "tuic",
-      "tag": "tuic-in",
-      "listen": "::",
-      "listen_port": $tuic_port,
-      "users": [
-        {
-          "uuid": "$uuid",
-          "password": "$uuid"
-        }
-      ],
-      "congestion_control": "bbr",
-      "tls": {
-        "enabled": true,
-        "server_name": "www.bing.com",
-        "alpn": ["h3"],
-        "certificate_path": "$work_dir/cert.pem",
-        "key_path": "$work_dir/key.pem"
       }
     }
   ],
@@ -363,11 +334,9 @@ get_info() {
   > "${work_dir}/url.txt"
   if [ -n "$ipv4" ]; then
     echo -e "vless://${uuid}@${ipv4}:${vless_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=chrome&pbk=${public_key}&type=tcp&headerType=none#${isp}" >> "${work_dir}/url.txt"
-    echo -e "tuic://${uuid}:${uuid}@${ipv4}:${tuic_port}?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=www.bing.com&allow_insecure=1#${isp}_TUIC" >> "${work_dir}/url.txt"
   fi
   if [ -n "$ipv6" ]; then
     echo -e "vless://${uuid}@[${ipv6}]:${vless_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=chrome&pbk=${public_key}&type=tcp&headerType=none#${isp}_IPv6" >> "${work_dir}/url.txt"
-    echo -e "tuic://${uuid}:${uuid}@[${ipv6}]:${tuic_port}?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=www.bing.com&allow_insecure=1#${isp}_TUIC_IPv6" >> "${work_dir}/url.txt"
   fi
   [ ! -s "${work_dir}/url.txt" ] && red "无法获取 IP 地址" && return
 
@@ -566,7 +535,6 @@ change_config() {
     green "1. 修改 vless-reality 端口"
     green "2. 修改 UUID"
     green "3. 修改 Reality 伪装域名 (SNI)"
-    green "4. 修改 TUIC 端口"
     purple "0. 返回主菜单"
     echo ""
     reading "请选择: " choice
@@ -575,7 +543,6 @@ change_config() {
             reading "\n请输入新端口 (回车随机): " new_port
             [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
             sed -i '/"type": "vless"/,/listen_port/ s/"listen_port": [0-9]\+/"listen_port": '"$new_port"'/' $config_dir
-            restart_singbox
             allow_port $new_port/tcp > /dev/null 2>&1
             restart_singbox
             sed -i 's/\(vless:\/\/[^@]*@[^:]*:\)[0-9]\{1,\}/\1'"$new_port"'/' $client_dir
@@ -588,7 +555,6 @@ change_config() {
             sed -i 's/"uuid": "[a-f0-9-]*"/"uuid": "'"$new_uuid"'"/' $config_dir
             restart_singbox
             sed -i -E 's/(vless:\/\/)[^@]*(@.*)/\1'"$new_uuid"'\2/' $client_dir
-            sed -i -E 's/(tuic:\/\/)[^:]*:[^@]*(@.*)/\1'"$new_uuid"':'"$new_uuid"'\2/' $client_dir
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
             green "\nUUID 已改为：${purple}${new_uuid}${re}\n"
             ;;
@@ -601,16 +567,6 @@ change_config() {
             sed -i "s/\(vless:\/\/[^\?]*\?\([^\&]*\&\)*sni=\)[^&]*/\1$new_sni/" $client_dir
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
             green "\nReality SNI 已改为：${purple}${new_sni}${re}\n"
-            ;;
-        4)
-            reading "\n请输入新 TUIC 端口 (回车随机): " new_port
-            [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
-            sed -i '/"type": "tuic"/,/listen_port/ s/"listen_port": [0-9]\+/"listen_port": '"$new_port"'/' $config_dir
-            restart_singbox
-            allow_port $new_port/udp > /dev/null 2>&1
-            sed -i 's/\(tuic:\/\/[^@]*@[^:]*:\)[0-9]\{1,\}/\1'"$new_port"'/' $client_dir
-            base64 -w0 $client_dir > /etc/sing-box/sub.txt
-            green "\nTUIC 端口已改为：${purple}$new_port${re}\n"
             ;;
         0) return ;;
         *) red "无效选项" ;;
@@ -683,7 +639,7 @@ while true; do
             if [ $r -eq 0 ]; then
                 yellow "sing-box 已安装\n"
             else
-                manage_packages install jq coreutils lsof tar openssl
+                manage_packages install jq coreutils lsof tar
                 install_singbox
                 if command_exists systemctl; then
                     main_systemd_services
