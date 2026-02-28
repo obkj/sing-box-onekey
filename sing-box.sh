@@ -616,7 +616,7 @@ menu() {
    singbox_status=$(check_singbox 2>/dev/null)
    clear
    echo ""
-   purple "=== sing-box 二合一脚本 ===\n"
+   purple "=== sing-box 一键脚本 ===\n"
    green "sing-box 状态: ${singbox_status}\n"
    green "1. 安装 sing-box"
    red "2. 卸载 sing-box"
