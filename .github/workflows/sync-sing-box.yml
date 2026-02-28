@@ -5,6 +5,9 @@ on:
   #  - cron: '0 0 * * *'  # 每天 00:00 UTC 运行
   workflow_dispatch:  # 允许手动触发
 
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -22,39 +25,30 @@ jobs:
           echo "::set-output name=version::${VERSION}"
           echo "::set-output name=latest_tag::${LATEST_TAG}"
 
-      - name: Determine architecture
-        id: arch
-        run: |
-          ARCH=$(uname -m)
-          case $ARCH in
-            x86_64) ARCH='amd64' ;;
-            x86 | i686 | i386) ARCH='386' ;;
-            aarch64 | arm64) ARCH='arm64' ;;
-            armv7l) ARCH='armv7' ;;
-            s390x) ARCH='s390x' ;;
-            *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-          esac
-          echo "LINUX_ARCH=$ARCH" >> $GITHUB_OUTPUT
-          echo "::set-output name=linux_arch::${ARCH}"
-
       - name: Download sing-box
         id: download
         run: |
           VERSION=${{ steps.get_latest_release.outputs.version }}
           LATEST_TAG=${{ steps.get_latest_release.outputs.latest_tag }}
-          LINUX_ARCH=${{ steps.arch.outputs.linux_arch }}
-          tarball="sing-box-${VERSION}-linux-${LINUX_ARCH}.tar.gz"
-          download_url="https://github.com/SagerNet/sing-box/releases/download/${LATEST_TAG}/${tarball}"
-          echo "Downloading $tarball from $download_url"
-          curl -sLo $tarball "$download_url"
-          echo "tarball_name=$tarball" >> $GITHUB_OUTPUT
-          echo "::set-output name=tarball_name::${tarball}"
+          
+          # 下载所有常用架构
+          for ARCH in amd64 386 arm64 armv7 s390x; do
+            FILE="sing-box-${VERSION}-linux-${ARCH}.tar.gz"
+            URL="https://github.com/SagerNet/sing-box/releases/download/${LATEST_TAG}/${FILE}"
+            echo "Downloading $FILE..."
+            curl -sLo "$FILE" "$URL"
+            
+            # 兼容脚本逻辑：脚本中将 armv7 映射为 arm，因此复制一份命名为 linux-arm
+            if [ "$ARCH" == "armv7" ]; then
+              cp "$FILE" "sing-box-${VERSION}-linux-arm.tar.gz"
+            fi
+          done
 
       - name: Upload to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ steps.download.outputs.tarball_name }}
+          file: sing-box-*.tar.gz
           tag: ${{ steps.get_latest_release.outputs.latest_tag }}
           overwrite: true
           file_glob: true
