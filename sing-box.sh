@@ -194,7 +194,8 @@ install_singbox() {
 
     [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}" && chmod 755 "${work_dir}"
     # 官方最新版: https://github.com/SagerNet/sing-box/releases
-    latest_tag=$(curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | jq -r '.tag_name // empty')
+    # 使用本项目的 releases
+    latest_tag=$(curl -sL "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" | jq -r '.tag_name // empty')
     [ -z "$latest_tag" ] && { red "获取最新版本失败"; exit 1; }
     version="${latest_tag#v}"
     # Linux 包名架构: amd64/386/arm64/arm/s390x
@@ -202,6 +203,9 @@ install_singbox() {
         armv7) LINUX_ARCH="arm" ;;
         *) LINUX_ARCH="${ARCH}" ;;
     esac
+
+    esac
+
     tarball="sing-box-${version}-linux-${LINUX_ARCH}.tar.gz"
     extract_dir="${work_dir}/sing-box-${version}-linux-${LINUX_ARCH}"
     download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_tag}/${tarball}"
